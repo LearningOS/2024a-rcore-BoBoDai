@@ -13,7 +13,7 @@ pub struct TaskControlBlock {
     /// The task syscall time
     pub task_syscall_time: [u32; MAX_SYSCALL_NUM],
     /// The task first call time
-    pub first_call_task_time: usize,
+    pub first_call_task_time: Option<usize>,
     /// The time from first call to current call
     pub task_time: usize,
 }
