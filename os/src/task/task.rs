@@ -1,6 +1,6 @@
 //! Types related to task management
 use super::TaskContext;
-use crate::config::TRAP_CONTEXT_BASE;
+use crate::config::{MAX_SYSCALL_NUM, TRAP_CONTEXT_BASE};
 use crate::mm::{
     kernel_stack_position, MapPermission, MemorySet, PhysPageNum, VirtAddr, KERNEL_SPACE,
 };
@@ -28,6 +28,13 @@ pub struct TaskControlBlock {
 
     /// Program break
     pub program_brk: usize,
+
+    /// The task syscall time
+    pub task_syscall_time: [u32; MAX_SYSCALL_NUM],
+    /// The task first call time
+    pub first_call_task_time: Option<usize>,
+    /// The task end call time
+    pub end_call_task_time: Option<usize>,
 }
 
 impl TaskControlBlock {
@@ -39,6 +46,22 @@ impl TaskControlBlock {
     pub fn get_user_token(&self) -> usize {
         self.memory_set.token()
     }
+
+    /// get task status
+    pub fn get_task_status(&self) -> TaskStatus {
+        self.task_status
+    }
+
+    /// get task syscall time
+    pub fn get_task_syscall_time(&self) -> [u32; MAX_SYSCALL_NUM] {
+        self.task_syscall_time
+    }
+
+    /// update task syscall time
+    pub fn update_task_syscall_time(&mut self, syscall_id: usize) {
+        self.task_syscall_time[syscall_id] += 1
+    }
+
     /// Based on the elf info in program, build the contents of task in a new address space
     pub fn new(elf_data: &[u8], app_id: usize) -> Self {
         // memory_set with elf program headers/trampoline/trap context/user stack
@@ -63,6 +86,9 @@ impl TaskControlBlock {
             base_size: user_sp,
             heap_bottom: user_sp,
             program_brk: user_sp,
+            task_syscall_time: [0; MAX_SYSCALL_NUM],
+            first_call_task_time: None,
+            end_call_task_time: None,
         };
         // prepare TrapContext in user space
         let trap_cx = task_control_block.get_trap_cx();

@@ -23,6 +23,9 @@ use switch::__switch;
 pub use task::{TaskControlBlock, TaskStatus};
 
 pub use context::TaskContext;
+use crate::config::MAX_SYSCALL_NUM;
+use crate::mm::{MapPermission, VirtAddr};
+use crate::timer::get_time_ms;
 
 /// The task manager, where all the tasks are managed.
 ///
@@ -80,6 +83,9 @@ impl TaskManager {
         let next_task = &mut inner.tasks[0];
         next_task.task_status = TaskStatus::Running;
         let next_task_cx_ptr = &next_task.task_cx as *const TaskContext;
+        if next_task.first_call_task_time.is_none() {
+            next_task.first_call_task_time = Some(get_time_ms());
+        }
         drop(inner);
         let mut _unused = TaskContext::zero_init();
         // before this, we should drop local variables that must be dropped manually
@@ -100,6 +106,7 @@ impl TaskManager {
     fn mark_current_exited(&self) {
         let mut inner = self.inner.exclusive_access();
         let cur = inner.current_task;
+        inner.tasks[cur].end_call_task_time = Some(get_time_ms());
         inner.tasks[cur].task_status = TaskStatus::Exited;
     }
 
@@ -126,6 +133,50 @@ impl TaskManager {
         inner.tasks[inner.current_task].get_trap_cx()
     }
 
+    /// get current task status
+    fn get_current_task_status(&self) -> TaskStatus {
+        let inner = self.inner.exclusive_access();
+        inner.tasks[inner.current_task].get_task_status()
+    }
+
+    /// get current task time
+    fn get_current_task_time(&self) -> usize {
+        let inner = self.inner.exclusive_access();
+        if inner.tasks[inner.current_task].end_call_task_time.is_none() {
+            get_time_ms() - inner.tasks[inner.current_task].first_call_task_time.unwrap()
+        } else {
+            inner.tasks[inner.current_task].end_call_task_time.unwrap() -
+                inner.tasks[inner.current_task].first_call_task_time.unwrap()
+        }
+    }
+
+    /// get current task syscall time
+    fn get_current_task_syscall_time(&self) -> [u32; MAX_SYSCALL_NUM] {
+        let inner = self.inner.exclusive_access();
+        inner.tasks[inner.current_task].get_task_syscall_time()
+    }
+
+    /// update current task syscall time
+    fn update_current_task_syscall_time(&self, syscall_id: usize) {
+        let mut inner = self.inner.exclusive_access();
+        let current = inner.current_task;
+        inner.tasks[current].update_task_syscall_time(syscall_id);
+    }
+
+    /// insert framed area
+    fn insert_framed_area(&self, start_va: VirtAddr, end_va: VirtAddr, permission: MapPermission) {
+        let mut inner = self.inner.exclusive_access();
+        let current = inner.current_task;
+        inner.tasks[current].memory_set.insert_framed_area(start_va, end_va, permission);
+    }
+
+    /// delete framed area
+    fn delete_framed_area(&self, start_va: VirtAddr, end_va: VirtAddr) {
+        let mut inner = self.inner.exclusive_access();
+        let current = inner.current_task;
+        inner.tasks[current].memory_set.delete_framed_area(start_va, end_va);
+    }
+
     /// Change the current 'Running' task's program break
     pub fn change_current_program_brk(&self, size: i32) -> Option<usize> {
         let mut inner = self.inner.exclusive_access();
@@ -140,6 +191,9 @@ impl TaskManager {
             let mut inner = self.inner.exclusive_access();
             let current = inner.current_task;
             inner.tasks[next].task_status = TaskStatus::Running;
+            if inner.tasks[next].first_call_task_time.is_none() {
+                inner.tasks[next].first_call_task_time = Some(get_time_ms());
+            }
             inner.current_task = next;
             let current_task_cx_ptr = &mut inner.tasks[current].task_cx as *mut TaskContext;
             let next_task_cx_ptr = &inner.tasks[next].task_cx as *const TaskContext;
@@ -201,4 +255,34 @@ pub fn current_trap_cx() -> &'static mut TrapContext {
 /// Change the current 'Running' task's program break
 pub fn change_program_brk(size: i32) -> Option<usize> {
     TASK_MANAGER.change_current_program_brk(size)
+}
+
+/// get current task status
+pub fn get_current_task_status() -> TaskStatus {
+    TASK_MANAGER.get_current_task_status()
+}
+
+/// get current task time
+pub fn get_current_task_time() -> usize {
+    TASK_MANAGER.get_current_task_time()
+}
+
+/// get current task syscall time
+pub fn get_current_task_syscall_time() -> [u32; MAX_SYSCALL_NUM] {
+    TASK_MANAGER.get_current_task_syscall_time()
+}
+
+/// update current task syscall time
+pub fn update_current_task_syscall_time(syscall_id: usize) {
+    TASK_MANAGER.update_current_task_syscall_time(syscall_id)
+}
+
+/// insert framed area
+pub fn insert_framed_area(start_va: VirtAddr, end_va: VirtAddr, permission: MapPermission) {
+    TASK_MANAGER.insert_framed_area(start_va, end_va, permission)
+}
+
+/// delete framed area
+pub fn delete_framed_area(start_va: VirtAddr, end_va: VirtAddr) {
+    TASK_MANAGER.delete_framed_area(start_va, end_va)
 }
