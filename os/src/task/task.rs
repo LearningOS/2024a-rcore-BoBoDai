@@ -22,7 +22,7 @@ pub struct TaskControlBlock {
     pub kernel_stack: KernelStack,
 
     /// Mutable
-    inner: UPSafeCell<TaskControlBlockInner>,
+    pub(crate) inner: UPSafeCell<TaskControlBlockInner>,
 }
 
 impl TaskControlBlock {
@@ -57,6 +57,7 @@ impl TaskControlBlock {
     }
 }
 
+/// TaskControlBlockInner
 pub struct TaskControlBlockInner {
     /// The physical page number of the frame where the trap context is placed
     pub trap_cx_ppn: PhysPageNum,
@@ -134,6 +135,7 @@ impl TaskControlBlockInner {
     fn update_system_call_time(&mut self, syscall_id: usize) {
         self.system_call_time[syscall_id] += 1;
     }
+    /// is zombie
     pub fn is_zombie(&self) -> bool {
         self.get_status() == TaskStatus::Zombie
     }
