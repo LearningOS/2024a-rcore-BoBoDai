@@ -47,7 +47,8 @@ pub use processor::{
     Processor,
 };
 use crate::timer::get_time_ms;
-
+/// big stride
+pub const BIG_STRIDE: isize = 10_000;
 /// Suspend the current 'Running' task and run the next task in task list.
 pub fn suspend_current_and_run_next() {
     // There must be an application running.

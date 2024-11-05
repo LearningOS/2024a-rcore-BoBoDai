@@ -13,7 +13,7 @@ use crate::{
 use crate::config::{PAGE_SIZE, TRAP_CONTEXT_BASE};
 use crate::mm::{translated_va_to_pa, MapPermission, MemorySet, PageTable, PhysPageNum, StepByOne, VirtAddr, KERNEL_SPACE};
 use crate::sync::UPSafeCell;
-use crate::task::{current_run_time, current_status, current_syscall_time, insert_framed_area, kstack_alloc, pid_alloc, remove_area_with_start_vpn, TaskContext, TaskControlBlock, TaskControlBlockInner};
+use crate::task::{current_run_time, current_status, current_syscall_time, insert_framed_area, kstack_alloc, pid_alloc, remove_area_with_start_vpn, TaskContext, TaskControlBlock, TaskControlBlockInner, BIG_STRIDE};
 use crate::timer::get_time_us;
 use crate::trap::{trap_handler, TrapContext};
 
@@ -262,6 +262,9 @@ pub fn sys_spawn(path: *const u8) -> isize {
                     run_start_time: None,
                     run_end_time: None,
                     system_call_time: [0;MAX_SYSCALL_NUM],
+                    stride: 0,
+                    priority: 16,
+                    pass: 0,
                 })
             },
         });
@@ -295,10 +298,18 @@ pub fn sys_spawn(path: *const u8) -> isize {
 }
 
 // YOUR JOB: Set task priority.
-pub fn sys_set_priority(_prio: isize) -> isize {
+pub fn sys_set_priority(prio: isize) -> isize {
     trace!(
         "kernel:pid[{}] sys_set_priority NOT IMPLEMENTED",
         current_task().unwrap().pid.0
     );
-    -1
+    if prio >= 2 {
+        let task = current_task().unwrap();
+        let mut inner = task.inner_exclusive_access();
+        inner.priority = prio;
+        inner.stride = BIG_STRIDE / prio;
+        prio
+    } else {
+        -1
+    }
 }

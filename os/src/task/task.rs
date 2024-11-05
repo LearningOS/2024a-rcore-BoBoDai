@@ -98,7 +98,16 @@ pub struct TaskControlBlockInner {
     pub run_end_time: Option<usize>,
 
     /// system call time
-    pub system_call_time: [u32; MAX_SYSCALL_NUM]
+    pub system_call_time: [u32; MAX_SYSCALL_NUM],
+
+    /// Stride
+    pub stride: isize,
+
+    /// Priority
+    pub priority: isize,
+
+    /// Pass
+    pub pass: isize,
 }
 
 impl TaskControlBlockInner {
@@ -175,6 +184,9 @@ impl TaskControlBlock {
                     run_start_time: None,
                     run_end_time: None,
                     system_call_time: [0;MAX_SYSCALL_NUM],
+                    stride: 0,
+                    priority: 16,
+                    pass: 0,
                 })
             },
         };
@@ -251,6 +263,9 @@ impl TaskControlBlock {
                     run_start_time: None,
                     run_end_time: None,
                     system_call_time: [0;MAX_SYSCALL_NUM],
+                    stride: 0,
+                    priority: 16,
+                    pass: 0,
                 })
             },
         });
