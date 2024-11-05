@@ -42,6 +42,8 @@ pub use processor::{
     current_syscall_time,
     current_run_time,
     update_current_syscall_time,
+    insert_framed_area,
+    remove_area_with_start_vpn,
     Processor,
 };
 use crate::timer::get_time_ms;

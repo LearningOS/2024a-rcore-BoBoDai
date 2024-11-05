@@ -10,8 +10,9 @@ use crate::{
         suspend_current_and_run_next, TaskStatus,
     },
 };
-use crate::mm::translated_va_to_pa;
-use crate::task::{current_run_time, current_status, current_syscall_time};
+use crate::config::PAGE_SIZE;
+use crate::mm::{translated_va_to_pa, MapPermission, PageTable, StepByOne, VirtAddr};
+use crate::task::{current_run_time, current_status, current_syscall_time, insert_framed_area, remove_area_with_start_vpn};
 use crate::timer::get_time_us;
 
 #[repr(C)]
@@ -156,22 +157,64 @@ pub fn sys_task_info(ti: *mut TaskInfo) -> isize {
 }
 
 /// YOUR JOB: Implement mmap.
-pub fn sys_mmap(_start: usize, _len: usize, _port: usize) -> isize {
+pub fn sys_mmap(start: usize, len: usize, port: usize) -> isize {
     trace!(
         "kernel:pid[{}] sys_mmap",
         current_task().unwrap().pid.0
     );
+    let start_va = VirtAddr::from(start);
+    let end_va = VirtAddr::from(start + len);
+    if start_va.page_offset() != 0 || port & !0x7 != 0 || port & 0x7 == 0 {
+        return -1
+    }
 
+    let pt = PageTable::from_token(current_user_token());
+    let mut vpn = start_va.floor();
+    for _ in 0..((len + PAGE_SIZE - 1) / PAGE_SIZE) {
+        match pt.translate(vpn) {
+            None => {}
+            Some(pte) => {
+                if pte.is_valid() {
+                    return -1
+                }
+            }
+        }
+        vpn.step();
+    }
+
+    let permissions = MapPermission::from_bits_truncate(( port << 1 ) as u8);
+    insert_framed_area(start_va, end_va, permissions| MapPermission::U);
     0
 }
 
 /// YOUR JOB: Implement munmap.
-pub fn sys_munmap(_start: usize, _len: usize) -> isize {
+pub fn sys_munmap(start: usize, len: usize) -> isize {
     trace!(
-        "kernel:pid[{}] sys_munmap NOT IMPLEMENTED",
+        "kernel:pid[{}] sys_munmap",
         current_task().unwrap().pid.0
     );
-    -1
+    let start_va = VirtAddr::from(start);
+    let end_va = VirtAddr::from(start + len);
+    if start_va.page_offset() != 0 {
+        return -1
+    }
+
+    let pt = PageTable::from_token(current_user_token());
+    let mut vpn = start_va.floor();
+    for _ in 0..((len + PAGE_SIZE - 1) / PAGE_SIZE) {
+        match pt.translate(vpn) {
+            None => return -1,
+            Some(pte) => {
+                if !pte.is_valid() {
+                    return -1
+                }
+            }
+        }
+        vpn.step();
+    }
+
+    remove_area_with_start_vpn(start_va, end_va);
+    0
 }
 
 /// change data segment size

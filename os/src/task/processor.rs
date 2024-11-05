@@ -12,6 +12,7 @@ use crate::trap::TrapContext;
 use alloc::sync::Arc;
 use lazy_static::*;
 use crate::config::MAX_SYSCALL_NUM;
+use crate::mm::{MapPermission, VPNRange, VirtAddr};
 
 /// Processor management structure
 pub struct Processor {
@@ -116,6 +117,18 @@ pub fn current_run_time() -> usize {
 pub fn update_current_syscall_time(syscall_id: usize) {
     let task = current_task().unwrap();
     task.update_syscall_time(syscall_id);
+}
+/// Insert framed area
+pub fn insert_framed_area(start_va: VirtAddr, end_va: VirtAddr, permission: MapPermission) {
+    let task = current_task().unwrap();
+    task.inner_exclusive_access().memory_set.insert_framed_area(start_va, end_va, permission);
+}
+/// Remove area with start vpn
+pub fn remove_area_with_start_vpn(start_va: VirtAddr, end_va: VirtAddr) {
+    let task = current_task().unwrap();
+    for vpn in VPNRange::new(start_va.floor(), end_va.ceil()) {
+        task.inner_exclusive_access().memory_set.remove_area_with_start_vpn(vpn);
+    };
 }
 
 ///Get the mutable reference to trap context of current task
