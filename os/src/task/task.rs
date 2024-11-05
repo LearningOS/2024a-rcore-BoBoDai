@@ -1,5 +1,5 @@
 //! Types related to task management & Functions for completely changing TCB
-use super::TaskContext;
+use super::{TaskContext, BIG_STRIDE};
 use super::{kstack_alloc, pid_alloc, KernelStack, PidHandle};
 use crate::config::{MAX_SYSCALL_NUM, TRAP_CONTEXT_BASE};
 use crate::mm::{MemorySet, PhysPageNum, VirtAddr, KERNEL_SPACE};
@@ -186,7 +186,7 @@ impl TaskControlBlock {
                     system_call_time: [0;MAX_SYSCALL_NUM],
                     stride: 0,
                     priority: 16,
-                    pass: 0,
+                    pass: BIG_STRIDE / 16,
                 })
             },
         };
@@ -265,7 +265,7 @@ impl TaskControlBlock {
                     system_call_time: [0;MAX_SYSCALL_NUM],
                     stride: 0,
                     priority: 16,
-                    pass: 0,
+                    pass: BIG_STRIDE / 16,
                 })
             },
         });
