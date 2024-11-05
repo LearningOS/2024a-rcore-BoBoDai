@@ -11,6 +11,7 @@ use crate::sync::UPSafeCell;
 use crate::trap::TrapContext;
 use alloc::sync::Arc;
 use lazy_static::*;
+use crate::config::MAX_SYSCALL_NUM;
 
 /// Processor management structure
 pub struct Processor {
@@ -61,6 +62,7 @@ pub fn run_tasks() {
             let mut task_inner = task.inner_exclusive_access();
             let next_task_cx_ptr = &task_inner.task_cx as *const TaskContext;
             task_inner.task_status = TaskStatus::Running;
+            task_inner.set_run_start_time();
             // release coming task_inner manually
             drop(task_inner);
             // release coming task TCB manually
@@ -90,6 +92,30 @@ pub fn current_task() -> Option<Arc<TaskControlBlock>> {
 pub fn current_user_token() -> usize {
     let task = current_task().unwrap();
     task.get_user_token()
+}
+
+/// Get the current status
+pub fn current_status() -> TaskStatus {
+    let task = current_task().unwrap();
+    task.get_status()
+}
+
+/// Get the current syscall time
+pub fn current_syscall_time() -> [u32; MAX_SYSCALL_NUM] {
+    let task = current_task().unwrap();
+    task.get_syscall_time()
+}
+
+/// Get the current run time
+pub fn current_run_time() -> usize {
+    let task = current_task().unwrap();
+    task.get_run_time()
+}
+
+/// Get the current run time
+pub fn update_current_syscall_time(syscall_id: usize) {
+    let task = current_task().unwrap();
+    task.update_syscall_time(syscall_id);
 }
 
 ///Get the mutable reference to trap context of current task
