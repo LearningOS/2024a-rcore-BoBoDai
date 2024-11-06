@@ -11,6 +11,8 @@ use crate::sync::UPSafeCell;
 use crate::trap::TrapContext;
 use alloc::sync::Arc;
 use lazy_static::*;
+use crate::config::MAX_SYSCALL_NUM;
+use crate::mm::{MapPermission, VPNRange, VirtAddr};
 
 /// Processor management structure
 pub struct Processor {
@@ -60,6 +62,7 @@ pub fn run_tasks() {
             // access coming task TCB exclusively
             let mut task_inner = task.inner_exclusive_access();
             let next_task_cx_ptr = &task_inner.task_cx as *const TaskContext;
+            task_inner.set_run_start_time();
             task_inner.task_status = TaskStatus::Running;
             // release coming task_inner manually
             drop(task_inner);
@@ -98,6 +101,43 @@ pub fn current_trap_cx() -> &'static mut TrapContext {
         .unwrap()
         .inner_exclusive_access()
         .get_trap_cx()
+}
+
+/// Get the current status
+pub fn current_status() -> TaskStatus {
+    let task = current_task().unwrap();
+    task.get_status()
+}
+
+/// Get the current syscall time
+pub fn current_syscall_time() -> [u32; MAX_SYSCALL_NUM] {
+    let task = current_task().unwrap();
+    task.get_syscall_time()
+}
+
+/// Get the current run time
+pub fn current_run_time() -> usize {
+    let task = current_task().unwrap();
+    task.get_run_time()
+}
+
+/// Get the current run time
+pub fn update_current_syscall_time(syscall_id: usize) {
+    let task = current_task().unwrap();
+    task.update_syscall_time(syscall_id);
+}
+
+/// Insert framed area
+pub fn insert_framed_area(start_va: VirtAddr, end_va: VirtAddr, permission: MapPermission) {
+    let task = current_task().unwrap();
+    task.inner_exclusive_access().memory_set.insert_framed_area(start_va, end_va, permission);
+}
+/// Remove area with start vpn
+pub fn remove_area_with_start_vpn(start_va: VirtAddr, end_va: VirtAddr) {
+    let task = current_task().unwrap();
+    for vpn in VPNRange::new(start_va.floor(), end_va.ceil()) {
+        task.inner_exclusive_access().memory_set.remove_area_with_start_vpn(vpn);
+    };
 }
 
 ///Return to idle control flow for new scheduling

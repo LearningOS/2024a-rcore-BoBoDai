@@ -1,7 +1,7 @@
 //! Types related to task management & Functions for completely changing TCB
-use super::TaskContext;
+use super::{TaskContext, BIG_STRIDE};
 use super::{kstack_alloc, pid_alloc, KernelStack, PidHandle};
-use crate::config::TRAP_CONTEXT_BASE;
+use crate::config::{MAX_SYSCALL_NUM, TRAP_CONTEXT_BASE};
 use crate::fs::{File, Stdin, Stdout};
 use crate::mm::{MemorySet, PhysPageNum, VirtAddr, KERNEL_SPACE};
 use crate::sync::UPSafeCell;
@@ -10,6 +10,7 @@ use alloc::sync::{Arc, Weak};
 use alloc::vec;
 use alloc::vec::Vec;
 use core::cell::RefMut;
+use crate::timer::get_time_ms;
 
 /// Task control block structure
 ///
@@ -23,7 +24,7 @@ pub struct TaskControlBlock {
     pub kernel_stack: KernelStack,
 
     /// Mutable
-    inner: UPSafeCell<TaskControlBlockInner>,
+    pub(crate) inner: UPSafeCell<TaskControlBlockInner>,
 }
 
 impl TaskControlBlock {
@@ -36,8 +37,29 @@ impl TaskControlBlock {
         let inner = self.inner_exclusive_access();
         inner.memory_set.token()
     }
+    /// Get task status
+    pub fn get_status(&self) -> TaskStatus {
+        let inner = self.inner_exclusive_access();
+        inner.get_status()
+    }
+    /// Get syscall time
+    pub fn get_syscall_time(&self) -> [u32; MAX_SYSCALL_NUM] {
+        let inner = self.inner_exclusive_access();
+        inner.get_system_call_time()
+    }
+    /// Get run time
+    pub fn get_run_time(&self) -> usize {
+        let inner = self.inner_exclusive_access();
+        inner.get_run_time()
+    }
+    /// Update syscall time
+    pub fn update_syscall_time(&self, syscall_id: usize) {
+        let mut inner = self.inner_exclusive_access();
+        inner.update_system_call_time(syscall_id);
+    }
 }
 
+///
 pub struct TaskControlBlockInner {
     /// The physical page number of the frame where the trap context is placed
     pub trap_cx_ppn: PhysPageNum,
@@ -64,6 +86,7 @@ pub struct TaskControlBlockInner {
 
     /// It is set when active exit or execution error occurs
     pub exit_code: i32,
+    ///
     pub fd_table: Vec<Option<Arc<dyn File + Send + Sync>>>,
 
     /// Heap bottom
@@ -71,21 +94,62 @@ pub struct TaskControlBlockInner {
 
     /// Program break
     pub program_brk: usize,
+
+    /// run start time
+    pub run_start_time: Option<usize>,
+
+    /// run end time
+    pub run_end_time: Option<usize>,
+
+    /// system call time
+    pub system_call_time: [u32; MAX_SYSCALL_NUM],
+
+    /// Stride
+    pub stride: isize,
+
+    /// Priority
+    pub priority: isize,
+
+    /// Pass
+    pub pass: isize,
 }
 
 impl TaskControlBlockInner {
+    ///
     pub fn get_trap_cx(&self) -> &'static mut TrapContext {
         self.trap_cx_ppn.get_mut()
     }
+    ///
     pub fn get_user_token(&self) -> usize {
         self.memory_set.token()
     }
     fn get_status(&self) -> TaskStatus {
         self.task_status
     }
+    ///
+    pub fn set_run_start_time(&mut self) {
+        if self.run_start_time.is_none() {
+            self.run_start_time = Some(get_time_ms());
+        }
+    }
+    fn get_run_time(&self) -> usize {
+        if self.task_status == TaskStatus::Zombie && !self.run_end_time.is_none() {
+            self.run_end_time.unwrap() - self.run_start_time.unwrap()
+        } else {
+            get_time_ms() - self.run_start_time.unwrap()
+        }
+    }
+    fn get_system_call_time(&self) -> [u32; MAX_SYSCALL_NUM] {
+        self.system_call_time
+    }
+    fn update_system_call_time(&mut self, syscall_id: usize) {
+        self.system_call_time[syscall_id] += 1;
+    }
+    ///
     pub fn is_zombie(&self) -> bool {
         self.get_status() == TaskStatus::Zombie
     }
+    ///
     pub fn alloc_fd(&mut self) -> usize {
         if let Some(fd) = (0..self.fd_table.len()).find(|fd| self.fd_table[*fd].is_none()) {
             fd
@@ -135,6 +199,12 @@ impl TaskControlBlock {
                     ],
                     heap_bottom: user_sp,
                     program_brk: user_sp,
+                    run_start_time: None,
+                    run_end_time: None,
+                    system_call_time: [0;MAX_SYSCALL_NUM],
+                    stride: 0,
+                    priority: 16,
+                    pass: BIG_STRIDE / 16,
                 })
             },
         };
@@ -216,6 +286,12 @@ impl TaskControlBlock {
                     fd_table: new_fd_table,
                     heap_bottom: parent_inner.heap_bottom,
                     program_brk: parent_inner.program_brk,
+                    run_start_time: None,
+                    run_end_time: None,
+                    system_call_time: [0;MAX_SYSCALL_NUM],
+                    stride: 0,
+                    priority: 16,
+                    pass: BIG_STRIDE / 16,
                 })
             },
         });
