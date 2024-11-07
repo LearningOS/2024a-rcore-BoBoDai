@@ -8,6 +8,7 @@ use alloc::vec::Vec;
 use spin::{Mutex, MutexGuard};
 /// Virtual filesystem layer over easy-fs
 pub struct Inode {
+    inode_id: u32,
     block_id: usize,
     block_offset: usize,
     fs: Arc<Mutex<EasyFileSystem>>,
@@ -17,12 +18,14 @@ pub struct Inode {
 impl Inode {
     /// Create a vfs inode
     pub fn new(
+        inode_id: u32,
         block_id: u32,
         block_offset: usize,
         fs: Arc<Mutex<EasyFileSystem>>,
         block_device: Arc<dyn BlockDevice>,
     ) -> Self {
         Self {
+            inode_id,
             block_id: block_id as usize,
             block_offset,
             fs,
@@ -53,7 +56,7 @@ impl Inode {
                 DIRENT_SZ,
             );
             if dirent.name() == name {
-                return Some(dirent.inode_id() as u32);
+                return Some(dirent.inode_id());
             }
         }
         None
@@ -65,6 +68,7 @@ impl Inode {
             self.find_inode_id(name, disk_inode).map(|inode_id| {
                 let (block_id, block_offset) = fs.get_disk_inode_pos(inode_id);
                 Arc::new(Self::new(
+                    inode_id,
                     block_id,
                     block_offset,
                     self.fs.clone(),
@@ -89,6 +93,14 @@ impl Inode {
             v.push(fs.alloc_data());
         }
         disk_inode.increase_size(new_size, v, &self.block_device);
+    }
+    /// get inode id
+    pub fn get_inode_id (&self) -> u32 {
+        self.inode_id
+    }
+    /// is dir
+    pub fn is_dir (&self) -> bool {
+        self.read_disk_inode(|disk_inode| disk_inode.is_dir())
     }
     /// Create inode under current inode by name
     pub fn create(&self, name: &str) -> Option<Arc<Inode>> {
@@ -131,6 +143,7 @@ impl Inode {
         block_cache_sync_all();
         // return inode
         Some(Arc::new(Self::new(
+            new_inode_id,
             block_id,
             block_offset,
             self.fs.clone(),

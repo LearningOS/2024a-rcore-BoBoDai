@@ -8,7 +8,7 @@ use alloc::sync::Arc;
 use easy_fs::BlockDevice;
 use lazy_static::*;
 
-type BlockDeviceImpl = virtio_blk::VirtIOBlock;
+type BlockDeviceImpl = VirtIOBlock;
 
 lazy_static! {
     /// The global block device driver instance: BLOCK_DEVICE with BlockDevice trait
