@@ -4,6 +4,7 @@ mod inode;
 mod stdio;
 
 use crate::mm::UserBuffer;
+pub use inode::{link, unlink};
 
 /// trait File for all file types
 pub trait File: Send + Sync {

@@ -163,8 +163,28 @@ impl File for OSInode {
             dev: 0,
             ino: inner.inode.get_inode_id() as u64,
             mode,
-            nlink: 1,
+            nlink: inner.inode.get_nlink(),
             pad: [0; 7],
         })
     }
+}
+
+/// link
+pub fn link(old_name: &str, new_name: &str) -> isize{
+    let return_code = ROOT_INODE.link(old_name, new_name);
+    if 0 == return_code {
+        let inode = ROOT_INODE.find(old_name).unwrap();
+        return inode.increase_nlink();
+    }
+    -1
+}
+
+/// unlink
+pub fn unlink(name: &str) -> isize{
+    if let Some(inode) = ROOT_INODE.find(name) {
+        inode.decrease_nlink();
+    } else {
+        return -1
+    }
+    ROOT_INODE.un_link(name)
 }

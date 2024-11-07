@@ -95,12 +95,26 @@ impl Inode {
         disk_inode.increase_size(new_size, v, &self.block_device);
     }
     /// get inode id
-    pub fn get_inode_id (&self) -> u32 {
+    pub fn get_inode_id(&self) -> u32 {
         self.inode_id
     }
     /// is dir
-    pub fn is_dir (&self) -> bool {
+    pub fn is_dir(&self) -> bool {
         self.read_disk_inode(|disk_inode| disk_inode.is_dir())
+    }
+    /// get link num
+    pub fn get_nlink(&self) -> u32 {
+        self.read_disk_inode(|disk_inode| disk_inode.get_nlink())
+    }
+    /// increase nlink
+    pub fn increase_nlink(&self) -> isize {
+        self.modify_disk_inode(|disk_inode| disk_inode.increase_nlink());
+        0
+    }
+    /// decrease nlink
+    pub fn decrease_nlink(&self) -> isize {
+        self.modify_disk_inode(|disk_inode| disk_inode.decrease_nlink());
+        0
     }
     /// Create inode under current inode by name
     pub fn create(&self, name: &str) -> Option<Arc<Inode>> {
@@ -195,5 +209,42 @@ impl Inode {
             }
         });
         block_cache_sync_all();
+    }
+    /// Link
+    pub fn link(&self, old_name: &str, new_name: &str) -> isize {
+        let mut fs = self.fs.lock();
+
+        if let Some(inode_id) = self.read_disk_inode(|disk_inode|
+            self.find_inode_id(old_name, disk_inode)) {
+
+            self.modify_disk_inode(|disk_inode| {
+                let file_num = disk_inode.size as usize / DIRENT_SZ;
+                let new_size = (file_num + 1) * DIRENT_SZ;
+                self.increase_size(new_size as u32, disk_inode, &mut fs);
+                let dir = DirEntry::new(new_name, inode_id);
+                disk_inode.write_at(file_num * DIRENT_SZ, dir.as_bytes(), &self.block_device);
+            });
+            0
+        } else {
+            -1
+        }
+    }
+    /// unLink
+    pub fn un_link(&self, name: &str) -> isize {
+        self.modify_disk_inode(|disk_inode| {
+            let file_num = disk_inode.size as usize / DIRENT_SZ;
+            let mut dir = DirEntry::empty();
+            for i in 0..file_num {
+                assert_eq!(
+                    disk_inode.read_at(DIRENT_SZ * i, dir.as_bytes_mut(), &self.block_device),
+                    DIRENT_SZ
+                );
+                if name == dir.name() {
+                    disk_inode.write_at(i * DIRENT_SZ, DirEntry::empty().as_bytes(), &self.block_device);
+                    return 0;
+                }
+            }
+            -1
+        })
     }
 }
