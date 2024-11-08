@@ -179,6 +179,12 @@ pub fn translated_byte_buffer(token: usize, ptr: *const u8, len: usize) -> Vec<&
     v
 }
 
+/// translated va to pa
+pub fn translated_va_to_pa(token: usize, va: usize) -> usize {
+    let page_table = PageTable::from_token(token);
+    usize::from(page_table.translate_va(VirtAddr::from(va)).unwrap())
+}
+
 /// Create String in kernel address space from u8 Array(end with 0) in other address space
 pub fn translated_str(token: usize, ptr: *const u8) -> String {
     let page_table = PageTable::from_token(token);
