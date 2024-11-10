@@ -57,7 +57,7 @@ lazy_static! {
             task_status: TaskStatus::UnInit,
             task_syscall_time: [0; MAX_SYSCALL_NUM],
             first_call_task_time: None,
-            task_time: 0
+            last_call_task_time: 0,
         }; MAX_APP_NUM];
         for (i, task) in tasks.iter_mut().enumerate() {
             task.task_cx = TaskContext::goto_restore(init_app_cx(i));
@@ -108,6 +108,7 @@ impl TaskManager {
     fn mark_current_exited(&self) {
         let mut inner = self.inner.exclusive_access();
         let current = inner.current_task;
+        inner.tasks[current].last_call_task_time = get_time_ms();
         inner.tasks[current].task_status = TaskStatus::Exited;
     }
 
@@ -119,7 +120,12 @@ impl TaskManager {
     /// get current task time
     fn get_current_task_time(&self) -> usize {
         let inner = self.inner.exclusive_access();
-        inner.tasks[inner.current_task].task_time
+        if inner.tasks[inner.current_task].last_call_task_time == 0 {
+            get_time_ms() - inner.tasks[inner.current_task].first_call_task_time.unwrap()
+        } else {
+            inner.tasks[inner.current_task].last_call_task_time -
+                inner.tasks[inner.current_task].first_call_task_time.unwrap()
+        }
     }
     /// get current task syscall time
     fn get_current_task_syscall_time(&self) -> [u32; MAX_SYSCALL_NUM] {
@@ -151,7 +157,6 @@ impl TaskManager {
             let mut inner = self.inner.exclusive_access();
             let current = inner.current_task;
             inner.tasks[next].task_status = TaskStatus::Running;
-            inner.tasks[current].task_time = get_time_ms() - inner.tasks[current].first_call_task_time.unwrap();
             if inner.tasks[next].first_call_task_time.is_none() {
                 inner.tasks[next].first_call_task_time = Some(get_time_ms());
             }
