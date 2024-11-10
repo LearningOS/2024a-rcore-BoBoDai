@@ -49,6 +49,20 @@ pub struct ProcessControlBlockInner {
     pub semaphore_list: Vec<Option<Arc<Semaphore>>>,
     /// condvar list
     pub condvar_list: Vec<Option<Arc<Condvar>>>,
+    /// available
+    pub available: Vec<usize>,
+    /// allocation
+    pub allocation: Vec<Vec<usize>>,
+    /// need
+    pub need: Vec<Vec<usize>>,
+    /// available
+    pub available_sem: Vec<usize>,
+    /// allocation
+    pub allocation_sem: Vec<Vec<usize>>,
+    /// need
+    pub need_sem: Vec<Vec<usize>>,
+    /// deadlock detection enabled
+    pub deadlock_detection_enabled: bool
 }
 
 impl ProcessControlBlockInner {
@@ -81,6 +95,10 @@ impl ProcessControlBlockInner {
     /// get a task with tid in this process
     pub fn get_task(&self, tid: usize) -> Arc<TaskControlBlock> {
         self.tasks[tid].as_ref().unwrap().clone()
+    }
+    /// set deadlock detection enabled
+    pub fn set_deadlock_detection_enabled(&mut self, enabled: bool) {
+        self.deadlock_detection_enabled = enabled
     }
 }
 
@@ -119,6 +137,13 @@ impl ProcessControlBlock {
                     mutex_list: Vec::new(),
                     semaphore_list: Vec::new(),
                     condvar_list: Vec::new(),
+                    available: vec![],
+                    allocation: vec![Vec::new()],
+                    need: vec![Vec::new()],
+                    available_sem: vec![],
+                    allocation_sem: vec![Vec::new()],
+                    need_sem: vec![Vec::new()],
+                    deadlock_detection_enabled: false,
                 })
             },
         });
@@ -245,6 +270,13 @@ impl ProcessControlBlock {
                     mutex_list: Vec::new(),
                     semaphore_list: Vec::new(),
                     condvar_list: Vec::new(),
+                    available: vec![],
+                    allocation: vec![Vec::new()],
+                    need: vec![Vec::new()],
+                    available_sem: vec![],
+                    allocation_sem: vec![Vec::new()],
+                    need_sem: vec![Vec::new()],
+                    deadlock_detection_enabled: false,
                 })
             },
         });
